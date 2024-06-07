@@ -94,14 +94,14 @@ function merge_attributes(gff::AbstractDataFrame)
             #   "=" => "%3D"
             #   "&" => "%26"
             #   "," => "%2C"
-            if occursin(r";", attributes[i, j])
-                @info "Replacing character \";\" with \"%3B\" in row $i of attribute \"$(names(attributes)[j])\""
-                attributes[i, j] = replace(attributes[i, j], ";" => "%3B", "=" => "%3D", "&" => "%26", "," => "%2C")
+            if occursin(r"[;,=&]", attributes[i, j])
+                # @info "Replacing character \";\" with \"%3B\" in row $i of attribute \"$(names(attributes)[j])\""
+                attributes[i, j] = replace(attributes[i, j], ";" => "%3B ", "=" => "%3D", "&" => " %26 ", "," => "%2C ")
             end
             attributes[i, j] = string(names(attributes)[j], "=", attributes[i,j])
         end
     end
-    return select(attributes, AsTable(:) => ByRow(x -> join(collect(skipmissing(x)), ";")) => :attributes2)[:, 1]
+    return select(attributes, AsTable(:) => ByRow(x -> join(collect(skipmissing(x)), ";")))[:, 1]
 end
 
 function gff_fasta(gff_file::String)
