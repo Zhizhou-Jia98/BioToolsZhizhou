@@ -27,6 +27,22 @@ function get_gff_header(gff_file::String)
     return gff_header
 end
 
+function get_gff_meta_info(gff_file::String)
+    metainfo = open(gff_file) do f
+        comment = Vector{String}()
+        while !eof(f)
+            line = readline(f)
+            if startswith(line, "#")
+                push!(comment, line)
+            else
+                break
+            end
+        end
+        comment
+    end
+    return metainfo
+end
+
 function parse_gff(gff_file::String)
     gff = CSV.read(gff_file, DataFrame; 
                    comment="#", delim="\t", header=false,
@@ -49,7 +65,6 @@ function parse_gff(gff_file::String)
     return gff
 end
 
-
 function parse_gff(gff_raw::AbstractDataFrame)
     gff = copy(gff_raw)
     rename!(gff, ["seqid", "source", "type", "start", "end", "score", "strand", "phase", "attributes"])
@@ -67,21 +82,6 @@ function parse_gff(gff_raw::AbstractDataFrame)
     return gff
 end
 
-function gff_meta_info(gff_file::String)
-    metainfo = open(gff_file) do f
-        comment = Vector{String}()
-        while !eof(f)
-            line = readline(f)
-            if startswith(line, "#")
-                push!(comment, line)
-            else
-                break
-            end
-        end
-        comment
-    end
-    return metainfo
-end
 
 function merge_attributes(gff::AbstractDataFrame)
     attributes = gff[:, 10:end]
