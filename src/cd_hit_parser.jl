@@ -1,16 +1,7 @@
 using DataFrames
-# struct CdHitEntry
 
-# end
-# struct CdHitCluster
-#     cluster_id::Int64
-#     cluster_size::Int64
-#     sequence_ids::Vector{Int64}
-#     sequence_lengths::Vector{Int64}
-#     sequence_
-# end
 
-function parse_cdhit(cdhit_file)
+function parse_cd_hit_to_table(cdhit_file)
     cdhit_table = DataFrame(
         :cluster_id => Int64[],
         :is_representative=> Bool[],
@@ -63,5 +54,58 @@ function parse_cdhit(cdhit_file)
 end
 
 # Test
-# @time cdhit_tbl = parse_cdhit("/Users/zhizhoujia/Desktop/srna_cdhit/est_ncrna_c85_s85.clstr")
+# @time cd_hit_table = parse_cdhit_to_table("/Users/zhizhoujia/Desktop/srna_cdhit/est_ncrna_c85_s85.clstr")
 # CSV.write("/Users/zhizhoujia/Desktop/test.csv", cdhit_tbl)
+
+struct CdHitSequence
+    seq_id_in_cluster::Int64
+    seq_length::Int64
+    seq_name::AbstractString
+    seq_chromosome::AbstractString
+    seq_description::AbstractString
+    align_info::AbstractString
+    is_representative::Bool
+end
+
+struct CdHitCluster
+    cluster_id::Int64
+    cluster_size::Int64
+    cd_hit_sequences::Vector{CdHitSequence}
+end
+
+function parse_cd_hit(cdhit_file)
+    cd_hit_clusters = CdHitCluster[]
+    open(cdhit_file) do f
+        cluster_id = -1
+        cluster_size = 0
+        cd_hit_sequences = CdHitSequence[]
+        while !eof(f)
+            line = readline(f)
+            if startswith(line, '>')
+                cluster_size = length(cd_hit_sequences)
+                push!(cd_hit_clusters, CdHitCluster(cluster_id, cluster_size, cd_hit_sequences))
+                empty!(cd_hit_sequences)
+                cluster_id = parse(Int64, last(split(line)))
+            else
+                # Example of a non-representative line
+                # ["0", "430nt,", ">DFS0007_02733:DFS0007_chr1:2873081-2873510:-...", "at", "1:430:1:430/+/99.77%"]
+                parsed_line = split(line)
+                seq_id = parse(Int64, parsed_line[1])
+                seq_length = parse(Int64, chop(parsed_line[2], tail=3))
+                seq_name = chop(split(parsed_line[3], ":")[1], head=1)
+                seq_chrom = split(parsed_line[3], ":")[2]
+                seq_description = chop(parsed_line[3], head=1, tail=3)
+                align_info = last(parsed_line)
+                is_representative = align_info == "*" ? true : false
+                push!(cd_hit_sequences, CdHitSequence(seq_id, seq_length, seq_name, seq_chrom, seq_description, align_info, is_representative))
+                # align_start_self = is_representative ? missing : parse(Int64, split(first(split(parsed_line[5], "/")), ":")[1])
+                # push!(cdhit_table, [cluster_id, is_representative, seq_id, seq_length, seq_name, seq_chrom, seq_description, align_start_self, align_end_self, align_start_representative, align_end_representative, align_strand, align_identity])
+            end
+        end
+        push!(cd_hit_clusters, CdHitCluster(cluster_id, cluster_size, cd_hit_sequences))
+    end
+    return cd_hit_clusters[2:end]
+end
+
+# Test
+# @time cd_hit_clusters = parse_cdhit("/Users/zhizhoujia/Desktop/srna_cdhit/est_ncrna_c85_s85.clstr")
