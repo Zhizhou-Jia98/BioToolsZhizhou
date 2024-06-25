@@ -1,17 +1,25 @@
-function write_fa_from_table(id, start, stop, strand, chromosome, genome_file, out_file::AbstractString; full_id::Bool=false)
-    FASTX.FASTA.Reader(open(genome_file); index = "$genome_file.fai") do f_genome
+function write_multiple_fa(fa_descriptions::AbstractVector,
+                           starts::AbstractVector,
+                           ends::AbstractVector,
+                           strands::AbstractVector,
+                           chromosomes::AbstractVector,
+                           genome_fa::AbstractString,
+                           out_file::AbstractString;
+                           full_description::Bool=false)
+    ispath("$genome_fa.fai") ? nothing : faidx(genome_fa)
+    FASTX.FASTA.Reader(open(genome_fa); index = "$genome_fa.fai") do f_genome
         FASTX.FASTA.Writer(open(out_file, "w")) do f_write
-            for i in eachindex(id)
-                if full_id
-                    seq_id = id[i] * ":" * chromosome[i] * ":" * start[i] * "-" * stop[i]
+            for i in eachindex(fa_descriptions)
+                if full_description
+                    seq_id = string(fa_descriptions[i], " ", chromosomes[i], ":", starts[i], "-", ends[i], ":", strands[i])
                 else
-                    seq_id = id[i]
+                    seq_id = fa_descriptions[i]
                 end
 
-                if strand[i] == "+"
-                    seq = sequence(f_genome[chromosome[i]])[start[i]:stop[i]]
-                elseif strand[i] == "-"
-                    seq = reverse_complement(sequence(LongDNA{4}, f_genome[chromosome[i]])[start[i]:stop[i]])
+                if strands[i] == "+"
+                    seq = sequence(f_genome[chromosomes[i]])[starts[i]:ends[i]]
+                elseif strands[i] == "-"
+                    seq = reverse_complement(sequence(LongDNA{4}, f_genome[chromosomes[i]])[starts[i]:ends[i]])
                 end
 
                 write(f_write, FASTA.Record(seq_id, seq))
