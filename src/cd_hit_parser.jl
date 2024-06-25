@@ -1,7 +1,7 @@
-using DataFrames
+# using DataFrames
 
 
-function parse_cd_hit_to_table(cdhit_file)
+function parse_cd_hit_to_table(cd_hit_file)
     cdhit_table = DataFrame(
         :cluster_id => Int64[],
         :is_representative=> Bool[],
@@ -17,7 +17,7 @@ function parse_cd_hit_to_table(cdhit_file)
         :align_strand=> Union{Missing, AbstractString}[],
         :align_identity=> Union{Missing, Float64}[],
     )
-    open(cdhit_file) do f
+    open(cd_hit_file) do f
         cluster_id = 0
         while !eof(f)
             line = readline(f)
@@ -58,24 +58,25 @@ end
 # CSV.write("/Users/zhizhoujia/Desktop/test.csv", cdhit_tbl)
 
 struct CdHitSequence
-    seq_id_in_cluster::Int64
-    seq_length::Int64
-    seq_name::AbstractString
-    seq_chromosome::AbstractString
-    seq_description::AbstractString
-    align_info::AbstractString
+    id_in_cluster::Int64
+    length::Int64
+    name::AbstractString
+    chromosome::AbstractString
+    description::AbstractString
+    alignment::AbstractString
     is_representative::Bool
 end
 
 struct CdHitCluster
-    cluster_id::Int64
-    cluster_size::Int64
-    cd_hit_sequences::Vector{CdHitSequence}
+    id::Int64
+    size::Int64
+    sequences::Vector{CdHitSequence}
+    # CdHitCluster(id, size, sequences) = new(id, size, deepcopy(sequences)) # Slower
 end
 
-function parse_cd_hit(cdhit_file)
+function parse_cd_hit(cd_hit_file)
     cd_hit_clusters = CdHitCluster[]
-    open(cdhit_file) do f
+    open(cd_hit_file) do f
         cluster_id = -1
         cluster_size = 0
         cd_hit_sequences = CdHitSequence[]
@@ -83,8 +84,10 @@ function parse_cd_hit(cdhit_file)
             line = readline(f)
             if startswith(line, '>')
                 cluster_size = length(cd_hit_sequences)
-                push!(cd_hit_clusters, CdHitCluster(cluster_id, cluster_size, cd_hit_sequences))
-                empty!(cd_hit_sequences)
+                cd_hit_cluster = CdHitCluster(cluster_id, cluster_size, cd_hit_sequences)
+                push!(cd_hit_clusters, cd_hit_cluster)
+                cd_hit_sequences = CdHitSequence[] # Either create a new vector, or deepcopy and empty the vector (slower)!!!!! ALWAYS remember!!!!!
+                # empty!(cd_hit_sequences)
                 cluster_id = parse(Int64, last(split(line)))
             else
                 # Example of a non-representative line
@@ -92,14 +95,13 @@ function parse_cd_hit(cdhit_file)
                 parsed_line = split(line)
                 seq_id = parse(Int64, parsed_line[1])
                 seq_length = parse(Int64, chop(parsed_line[2], tail=3))
-                seq_name = chop(split(parsed_line[3], ":")[1], head=1)
+                seq_name = chop(split(parsed_line[3], ":")[1], head=1, tail=0)
                 seq_chrom = split(parsed_line[3], ":")[2]
                 seq_description = chop(parsed_line[3], head=1, tail=3)
                 align_info = last(parsed_line)
                 is_representative = align_info == "*" ? true : false
-                push!(cd_hit_sequences, CdHitSequence(seq_id, seq_length, seq_name, seq_chrom, seq_description, align_info, is_representative))
-                # align_start_self = is_representative ? missing : parse(Int64, split(first(split(parsed_line[5], "/")), ":")[1])
-                # push!(cdhit_table, [cluster_id, is_representative, seq_id, seq_length, seq_name, seq_chrom, seq_description, align_start_self, align_end_self, align_start_representative, align_end_representative, align_strand, align_identity])
+                cd_hit_sequence = CdHitSequence(seq_id, seq_length, seq_name, seq_chrom, seq_description, align_info, is_representative)
+                push!(cd_hit_sequences, cd_hit_sequence)
             end
         end
         push!(cd_hit_clusters, CdHitCluster(cluster_id, cluster_size, cd_hit_sequences))
@@ -108,4 +110,4 @@ function parse_cd_hit(cdhit_file)
 end
 
 # Test
-# @time cd_hit_clusters = parse_cdhit("/Users/zhizhoujia/Desktop/srna_cdhit/est_ncrna_c85_s85.clstr")
+# @time cd_hit_clusters = parse_cd_hit("/Users/zhizhoujia/Research/IPS/daniel_group/Vibrio_parahaemolyticus/Vp_reference_sequences_and_annotation/pangenome/vp_ecogroup/trycycler_assemblies/srna_cdhit/est_ncrna_c85_s85.clstr");
