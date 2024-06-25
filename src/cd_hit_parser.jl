@@ -84,8 +84,7 @@ function parse_cd_hit(cd_hit_file)
             line = readline(f)
             if startswith(line, '>')
                 cluster_size = length(cd_hit_sequences)
-                cd_hit_cluster = CdHitCluster(cluster_id, cluster_size, cd_hit_sequences)
-                push!(cd_hit_clusters, cd_hit_cluster)
+                push!(cd_hit_clusters, CdHitCluster(cluster_id, cluster_size, cd_hit_sequences))
                 cd_hit_sequences = CdHitSequence[] # Either create a new vector, or deepcopy and empty the vector (slower)!!!!! ALWAYS remember!!!!!
                 # empty!(cd_hit_sequences)
                 cluster_id = parse(Int64, last(split(line)))
@@ -104,10 +103,12 @@ function parse_cd_hit(cd_hit_file)
                 push!(cd_hit_sequences, cd_hit_sequence)
             end
         end
+        cluster_size = length(cd_hit_sequences)
         push!(cd_hit_clusters, CdHitCluster(cluster_id, cluster_size, cd_hit_sequences))
     end
     return cd_hit_clusters[2:end]
 end
 
 # Test
-# @time cd_hit_clusters = parse_cd_hit("/Users/zhizhoujia/Research/IPS/daniel_group/Vibrio_parahaemolyticus/Vp_reference_sequences_and_annotation/pangenome/vp_ecogroup/trycycler_assemblies/srna_cdhit/est_ncrna_c85_s85.clstr");
+@time cd_hit_clusters = parse_cd_hit("/Users/zhizhoujia/Research/IPS/daniel_group/Vibrio_parahaemolyticus/Vp_reference_sequences_and_annotation/pangenome/vp_ecogroup/trycycler_assemblies/srna_cdhit/est_ncrna_c85_s85.clstr");
+cd_hit_clusters[end]
