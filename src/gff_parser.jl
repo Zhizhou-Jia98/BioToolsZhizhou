@@ -43,16 +43,54 @@ function get_gff_meta_info(gff_file::String)
     return metainfo
 end
 
+function parse_gff_attribute(attr::AbstractString)
+    attr_split = split.(strip.(split(attr, ";")), "=")
+    return Dict(attr_split)
+end
+
+function parse_gtf_attribute(attr::AbstractString)
+    attr_temp = rstrip.(rstrip.(attr), ';')
+    attr_split = split.(strip.(split(attr_temp, "\"; ")), " ")
+    for i in eachindex(attr_split)
+        if length(attr_split[i]) > 2
+            name = first(attr_split[i])
+            content = join(attr_split[i][2:end], " ")
+            attr_split[i] = [name, content]
+        end
+        attr_split[i][2] = strip(attr_split[i][2], '\"')
+    end
+    return Dict(attr_split)
+end
+
 function parse_gff(gff_file::String)
-    gff = CSV.read(gff_file, DataFrame; 
+    gff = CSV.read(gff_file, DataFrame;
                    comment="#", delim="\t", header=false,
                    pool=false, stringtype=String)
+    filetype = last(split(gff_file, "."))
     if any(startswith.(gff.:Column1, ">"))
         gff = gff[1:first(findall(startswith.(gff.:Column1, ">"))) - 1, :]
     end
     rename!(gff, ["seqid", "source", "type", "start", "end", "score", "strand", "phase", "attributes"])
+    # if endswith(gff_file, "gff")
+    #     attr_delim = "\t"
+    # elseif endswith(gff_file, "gtf")
+    #     gff.:attributes = rstrip.(rstrip.(gff.:attributes), ';')
+    #     attr_delim = " "
+    # end
     for i in 1:size(gff)[1]
-        attributes = Dict(split.(split(gff.:attributes[i], ";"), "="))
+        # println(split.(strip.(split(gff.:attributes[i], ";")), attr_delim))
+        # attributes = Dict()
+        # attributes = try
+        #     attributes_split = split.(strip.(split(gff.:attributes[i], ";")), attr_delim)
+        #     Dict(split.(strip.(split(gff.:attributes[i], ";")), attr_delim))
+        # catch
+        #     println(split.(strip.(split(gff.:attributes[i], ";")), attr_delim))
+        # end
+        if filetype == "gff"
+            attributes = parse_gff_attribute(gff.attributes[i])
+        elseif filetype == "gtf"
+            attributes = parse_gtf_attribute(gff.attributes[i])
+        end
         for (key, value) in attributes
             if key in names(gff)
                 gff[i, key] = value
@@ -115,3 +153,5 @@ function gff_fasta(gff_file::String)
         return records
     end
 end
+
+get_gtf_header = get_gff_header
