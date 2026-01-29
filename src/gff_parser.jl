@@ -122,19 +122,24 @@ end
 
 
 function merge_attributes(gff::AbstractDataFrame)
-    attributes = gff[:, 10:end]
+    if names(gff)[1:9] == ["seqid", "source", "type", "start", "end", "score", "strand", "phase", "attributes"]
+        attributes = gff[:, 10:end]
+    else
+        attributes = gff[:, :]
+    end
 
     for i in axes(attributes, 1), j in axes(attributes, 2)
         if !ismissing(attributes[i, j])
-            # Check if ";" is present in attributes, if so, replace it with "%3B"
-            # Check and replace reserved characters in "attributes" column:
-            #   ";" => "%3B"
-            #   "=" => "%3D"
-            #   "&" => "%26"
-            #   "," => "%2C"
+            ## Check if ";" is present in attributes, if so, replace it with "%3B"
+            ## Check and replace reserved characters in "attributes" column:
+            ##   ";" => "%3B"
+            ##   "=" => "%3D"
+            ##   "&" => "%26"
+            ##   "," => "%2C"
+            ##   "\n" => ""
             if occursin(r"[;,=&]", attributes[i, j])
                 # @info "Replacing character \";\" with \"%3B\" in row $i of attribute \"$(names(attributes)[j])\""
-                attributes[i, j] = replace(attributes[i, j], ";" => "%3B ", "=" => "%3D", "&" => " %26 ", "," => "%2C ")
+                attributes[i, j] = replace(attributes[i, j], ";" => "%3B ", "=" => "%3D", "&" => " %26 ", "," => "%2C ", "\n" => "")
             end
             attributes[i, j] = string(names(attributes)[j], "=", attributes[i,j])
         end
@@ -152,6 +157,10 @@ function gff_fasta(gff_file::String)
         close(rdr)
         return records
     end
+end
+
+function write_gff()
+    
 end
 
 get_gtf_header = get_gff_header
