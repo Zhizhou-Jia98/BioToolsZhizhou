@@ -121,8 +121,8 @@ function parse_gff(gff_raw::AbstractDataFrame)
 end
 
 
-function merge_attributes(gff::AbstractDataFrame)
-    attributes = gff[:, 10:end]
+function merge_attributes(gff::AbstractDataFrame, cols)
+    attributes = gff[:, cols]
 
     for i in axes(attributes, 1), j in axes(attributes, 2)
         if !ismissing(attributes[i, j])
@@ -132,9 +132,10 @@ function merge_attributes(gff::AbstractDataFrame)
             #   "=" => "%3D"
             #   "&" => "%26"
             #   "," => "%2C"
-            if occursin(r"[;,=&]", attributes[i, j])
+            #   "\n" => ""
+            if isa(attributes[i, j], AbstractString) && occursin(r"[;,=&]", attributes[i, j])
                 # @info "Replacing character \";\" with \"%3B\" in row $i of attribute \"$(names(attributes)[j])\""
-                attributes[i, j] = replace(attributes[i, j], ";" => "%3B ", "=" => "%3D", "&" => " %26 ", "," => "%2C ")
+                attributes[i, j] = replace(attributes[i, j], ";" => "%3B ", "=" => "%3D", "&" => " %26 ", "," => "%2C ", "\n" => "")
             end
             attributes[i, j] = string(names(attributes)[j], "=", attributes[i,j])
         end
@@ -152,6 +153,10 @@ function gff_fasta(gff_file::String)
         close(rdr)
         return records
     end
+end
+
+function write_gff()
+    
 end
 
 get_gtf_header = get_gff_header

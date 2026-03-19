@@ -45,6 +45,12 @@ end
 function samtools_count(type::String, bam_file::String, num_threads::Integer=1; chromosome::String="all")
     so = IOBuffer()
 
+    # segemehl somehow can map reads in a pair to different chromosomes,
+    # so we need to not count the pairs that are mapped to different chromosomes,
+    # which can be done by checking the 7th column of an alignment.
+    # "=" means the other in pair is mapped to the same chromosome
+    # This needs to be done for all the counting of paired alignments!!!
+
     if occursin("multi", type)
         if type == "multi" # "mapped" - "unique"
             println("To get the number of multimapping alignments:")
@@ -57,7 +63,7 @@ function samtools_count(type::String, bam_file::String, num_threads::Integer=1; 
 
     elseif occursin("pair", type)
         if type == "total_pair" # Need to divide by 2 after samtools view -c
-            filters = "-f 0x3 -F 0x900"
+            filters = "-f 0x3"
         elseif type == "mapped_pair"
             filters = "-F 0x904 -f 0x3"
         elseif type == "unique_pair"
@@ -65,10 +71,10 @@ function samtools_count(type::String, bam_file::String, num_threads::Integer=1; 
         end
 
         if chromosome == "all"
-            run(pipeline(`bash -c "samtools view -@ $num_threads -c $filters $bam_file"`, stdout=so))
+            run(pipeline(pipeline(`bash -c "samtools view -@ $num_threads $filters $bam_file"`, `cut -f 7`, `grep -c =`); stdout=so))
             return Int64(parse(Int64, strip(String(take!(so)))) / 2)
         else
-            run(pipeline(`bash -c "samtools view -@ $num_threads -c $filters $bam_file $chromosome"`, stdout=so))
+            run(pipeline(pipeline(`bash -c "samtools view -@ $num_threads $filters $bam_file $chromosome"`, `cut -f 7`, `grep -c =`); stdout=so))
             return Int64(parse(Int64, strip(String(take!(so)))) / 2)
         end
 
