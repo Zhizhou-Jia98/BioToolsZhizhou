@@ -121,8 +121,12 @@ function parse_gff(gff_raw::AbstractDataFrame)
 end
 
 
-function merge_attributes(gff::AbstractDataFrame, cols)
-    attributes = gff[:, cols]
+function merge_attributes(gff::AbstractDataFrame)
+    if names(gff)[1:9] == ["seqid", "source", "type", "start", "end", "score", "strand", "phase", "attributes"]
+        attributes = gff[:, 10:end]
+    else
+        attributes = gff[:, :]
+    end
 
     for i in axes(attributes, 1), j in axes(attributes, 2)
         if !ismissing(attributes[i, j])
@@ -135,6 +139,7 @@ function merge_attributes(gff::AbstractDataFrame, cols)
             #   "\n" => ""
             if isa(attributes[i, j], AbstractString) && occursin(r"[;,=&]", attributes[i, j])
                 # @info "Replacing character \";\" with \"%3B\" in row $i of attribute \"$(names(attributes)[j])\""
+                attributes[i, j] = replace(attributes[i, j], ";" => "%3B ", "=" => "%3D", "&" => " %26 ", "," => "%2C ", "\n" => "")
                 attributes[i, j] = replace(attributes[i, j], ";" => "%3B ", "=" => "%3D", "&" => " %26 ", "," => "%2C ", "\n" => "")
             end
             attributes[i, j] = string(names(attributes)[j], "=", attributes[i,j])
@@ -153,6 +158,10 @@ function gff_fasta(gff_file::String)
         close(rdr)
         return records
     end
+end
+
+function write_gff()
+    
 end
 
 function write_gff()
