@@ -160,12 +160,7 @@ function gff_fasta(gff_file::String)
     end
 end
 
-function write_gff()
-    
-end
+# function write_gff()
+#     
+# end
 
-function write_gff()
-    
-end
-
-get_gtf_header = get_gff_header

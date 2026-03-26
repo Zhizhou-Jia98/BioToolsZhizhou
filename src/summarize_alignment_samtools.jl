@@ -24,12 +24,16 @@ ok    "NC_004605.1-num_multi"  => 2
 
 function samtools_sort_and_index(sam_file::String, num_threads::Integer=1, keep_sam::Bool=true)
     bam_file = replace(sam_file, ".sam" => "_sort.bam")
-    println("Sorting $sam_file and output to $bam_file")
-    @time run(pipeline(`samtools view -@ $num_threads -b $sam_file`, `samtools sort -@ $num_threads -o $bam_file`))
-    println("Indexing $bam_file")
-    @time run(`samtools index -@ $num_threads $bam_file`)
-    if !keep_sam
-        rm(sam_file)
+    if isfile(bam_file)
+        println("Sorted BAM file $bam_file already exists 😄")
+    else
+        println("Sorting $sam_file and output to $bam_file")
+        @time run(pipeline(`samtools view -@ $num_threads -b $sam_file`, `samtools sort -@ $num_threads -o $bam_file`))
+        println("Indexing $bam_file")
+        @time run(`samtools index -@ $num_threads $bam_file`)
+        if !keep_sam
+            rm(sam_file)
+        end
     end
     return bam_file
 end
@@ -77,7 +81,6 @@ function samtools_count(type::String, bam_file::String, num_threads::Integer=1; 
             run(pipeline(pipeline(`bash -c "samtools view -@ $num_threads $filters $bam_file $chromosome"`, `cut -f 7`, `grep -c =`); stdout=so))
             return Int64(parse(Int64, strip(String(take!(so)))) / 2)
         end
-
     else
         if type == "total"
             filters = "-F 0x900"
@@ -98,7 +101,7 @@ function samtools_count(type::String, bam_file::String, num_threads::Integer=1; 
     end    
 end
 
-mutable struct AlignmentSummary
+mutable struct AlignmentSummaryPairedEnd
     library_name::String
     chromosomes::Vector{String}
     num_total::Dict{String, Integer}
@@ -115,7 +118,7 @@ mutable struct AlignmentSummary
     perc_multi::Dict{String, AbstractFloat}
 end
 
-function AlignmentSummary(bam_file::String, lib_name::String, chromosomes::Vector{String}, num_threads::Int64)
+function AlignmentSummaryPairedEnd(bam_file::String, lib_name::String, chromosomes::Vector{String}, num_threads::Int64)
     
     num_total::Dict{String, Integer} = Dict("all" => samtools_count("total", bam_file, num_threads))
     num_mapped::Dict{String, Integer} = Dict("all" => samtools_count("mapped", bam_file, num_threads))
@@ -145,7 +148,7 @@ function AlignmentSummary(bam_file::String, lib_name::String, chromosomes::Vecto
         perc_multi[chr] = num_multi[chr] / num_mapped[chr]
     end
 
-    return AlignmentSummary(
+    return AlignmentSummaryPairedEnd(
         lib_name, 
         chromosomes, 
         num_total,
@@ -163,6 +166,56 @@ function AlignmentSummary(bam_file::String, lib_name::String, chromosomes::Vecto
         )
 end
 
+
+mutable struct AlignmentSummarySingleEnd
+    library_name::String
+    chromosomes::Vector{String}
+    num_total::Dict{String, Integer}
+    num_mapped::Dict{String, Integer}
+    num_unmapped::Dict{String, Integer}
+    num_unique::Dict{String, Integer}
+    num_multi::Dict{String, Integer} # ("num_mapped" - "num_unique")
+    perc_mapped::Dict{String, AbstractFloat}
+    perc_uniq::Dict{String, AbstractFloat}
+    perc_multi::Dict{String, AbstractFloat}
+end
+
+function AlignmentSummarySingleEnd(bam_file::String, lib_name::String, chromosomes::Vector{String}, num_threads::Int64)
+    
+    num_total::Dict{String, Integer} = Dict("all" => samtools_count("total", bam_file, num_threads))
+    num_mapped::Dict{String, Integer} = Dict("all" => samtools_count("mapped", bam_file, num_threads))
+    num_unmapped::Dict{String, Integer} = Dict("all" => samtools_count("unmapped", bam_file, num_threads))
+    num_unique::Dict{String, Integer} = Dict("all" => samtools_count("unique", bam_file, num_threads))
+    num_multi::Dict{String, Integer} = Dict("all" => num_mapped["all"] - num_unique["all"])
+    perc_mapped::Dict{String, AbstractFloat} = Dict("all" => num_mapped["all"] / num_total["all"])
+    perc_uniq::Dict{String, AbstractFloat} = Dict("all" => num_unique["all"] / num_mapped["all"])
+    perc_multi::Dict{String, AbstractFloat} = Dict("all" => num_multi["all"] / num_mapped["all"])
+
+    for chr in chromosomes
+        num_total[chr] = samtools_count("total", bam_file, num_threads; chromosome=chr)
+        num_mapped[chr] = samtools_count("mapped", bam_file, num_threads; chromosome=chr)
+        num_unmapped[chr] = samtools_count("unmapped", bam_file, num_threads; chromosome=chr)
+        num_unique[chr] = samtools_count("unique", bam_file, num_threads; chromosome=chr)
+        num_multi[chr] = num_mapped[chr] - num_unique[chr]
+        perc_mapped[chr] = num_mapped[chr] / num_total[chr]
+        perc_uniq[chr] = num_unique[chr] / num_mapped[chr]
+        perc_multi[chr] = num_multi[chr] / num_mapped[chr]
+    end
+
+    return AlignmentSummarySingleEnd(
+        lib_name, 
+        chromosomes, 
+        num_total,
+        num_mapped,
+        num_unmapped,
+        num_unique,
+        num_multi,
+        perc_mapped,
+        perc_uniq,
+        perc_multi
+        )
+end
+
 function summary_table(summary_dtype::DataType, chromosomes::AbstractVector{String})
     summaries = String[]
     for (i, field) in enumerate(fieldnames(summary_dtype))
@@ -173,8 +226,14 @@ function summary_table(summary_dtype::DataType, chromosomes::AbstractVector{Stri
     return DataFrame("summaries" => summaries)
 end
 
-function summarize_multi_bams(bam_files::AbstractVector{String}, chromosomes::AbstractVector{String}, num_threads::Integer=1, keep_orginial_sam::Bool=true)
-    align_sum_tbl = summary_table(AlignmentSummary, chromosomes)
+function summarize_multi_bams(bam_files::AbstractVector{String}, chromosomes::AbstractVector{String}, num_threads::Integer=1, keep_orginial_sam::Bool=true; paired_end::Bool=true)
+    if paired_end
+        println("Summarizing paired-end alignments in BAM files: $(bam_files)")
+        align_sum_tbl = summary_table(AlignmentSummaryPairedEnd, chromosomes)
+    else
+        println("Summarizing single-end alignments in BAM files: $(bam_files)")
+        align_sum_tbl = summary_table(AlignmentSummarySingleEnd, chromosomes)
+    end
 
     for bam_file in bam_files
         lib_name = replace(last(splitdir(bam_file)), ".bam" => "", "_sort" => "")
@@ -183,7 +242,11 @@ function summarize_multi_bams(bam_files::AbstractVector{String}, chromosomes::Ab
         else
             @time "Indexing $bam_file" run(`bash -c "samtools index -@ $num_threads $bam_file"`)
         end
-        @time "Summarize $lib_name" align_sum = AlignmentSummary(bam_file, lib_name, chromosomes, num_threads)
+        if paired_end
+            @time "Summarize $lib_name" align_sum = AlignmentSummaryPairedEnd(bam_file, lib_name, chromosomes, num_threads)
+        else
+            @time "Summarize $lib_name" align_sum = AlignmentSummarySingleEnd(bam_file, lib_name, chromosomes, num_threads)
+        end
         println()
         align_sum_tbl[:, align_sum.library_name] = Vector{Number}(undef, size(align_sum_tbl)[1])
         for field in fieldnames(typeof(align_sum))
