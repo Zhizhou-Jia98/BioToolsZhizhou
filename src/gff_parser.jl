@@ -127,7 +127,9 @@ function merge_attributes(gff::AbstractDataFrame)
     else
         attributes = gff[:, :]
     end
-
+    for j in axes(attributes, 2)
+        attributes[!, j] = map(x -> ismissing(x) ? missing : string(x), attributes[!, j])
+    end
     for i in axes(attributes, 1), j in axes(attributes, 2)
         if !ismissing(attributes[i, j])
             # Check if ";" is present in attributes, if so, replace it with "%3B"
