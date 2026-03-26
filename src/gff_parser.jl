@@ -121,12 +121,8 @@ function parse_gff(gff_raw::AbstractDataFrame)
 end
 
 
-function merge_attributes(gff::AbstractDataFrame)
-    if names(gff)[1:9] == ["seqid", "source", "type", "start", "end", "score", "strand", "phase", "attributes"]
-        attributes = gff[:, 10:end]
-    else
-        attributes = gff[:, :]
-    end
+function merge_attributes(gff::AbstractDataFrame, attr_cols::AbstractVector)
+    attributes = gff[:, attr_cols]
     for j in axes(attributes, 2)
         attributes[!, j] = map(x -> ismissing(x) ? missing : string(x), attributes[!, j])
     end
